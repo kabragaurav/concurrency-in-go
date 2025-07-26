@@ -235,6 +235,7 @@ Aloha
   - Sending causes panic
   - Receiving returns zero-value of channel data-type once closed channel does not have anymore values
   - Closing again causes panic
+- A `nil` channel blocks both sending and receiving
 
 #### What will be possible outputs of below programs?
 1. 
@@ -381,4 +382,82 @@ func sendToChannel(ch chan string, greetings []string) {
 	}
 	close(ch)
 }
+```
+
+### `select` Over Channels
+`select` statement allows a goroutine to wait on multiple channels and get unblocked as soon as one of the channels is ready.
+If multiple channels become ready, one is picked at random.
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch1 := make(chan string)
+	ch2 := make(chan string)
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		ch1 <- "Namaste"
+	}()
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		ch2 <- "Namaskar"
+	}()
+
+	select {
+	case greeting := <-ch1:
+		fmt.Println("Receive from ch1", greeting)
+	case greeting := <-ch2:
+		fmt.Println("Receive from ch2", greeting)
+	}
+}
+
+/**
+Potential output:
+Receive from ch2 Namaskar
+*/
+```
+
+Reason: Since `ch2` sends first, the `select` unblocks on `ch2`. The `select` ensures the program responds to whichever channel comes ready first.
+
+### "Done" Channel
+It is common in Go to use a channel `chan struct{}` as a "done" channel for signaling that work is done. 
+The empty `struct{}` type occupies `0 bytes`, so using `chan struct{}` is a memory-efficient and idiomatic way to signal events without needing to send any data.
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	fmt.Println("Starting main")
+	ch := make(chan struct{})
+	go doSomeProcessing(ch)
+	<-ch
+	fmt.Println("Completing main")
+}
+
+func doSomeProcessing(ch chan struct{}) {
+	fmt.Println("Starting doSomeProcessing")
+	time.Sleep(2 * time.Second)		// simulate some work
+	fmt.Println("Finished doSomeProcessing")
+	close(ch)
+}
+
+/**
+Output:
+Starting main
+Starting doSomeProcessing
+Finished doSomeProcessing
+Completing main
+*/
 ```
