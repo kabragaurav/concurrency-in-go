@@ -461,3 +461,95 @@ Finished doSomeProcessing
 Completing main
 */
 ```
+
+### `sync.Once`
+
+Below we get different objects everytime.
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			instance := createInstance()
+			fmt.Println(&instance)
+		}()
+	}
+
+	wg.Wait()
+}
+
+type Singleton struct {
+}
+
+func createInstance() *Singleton {
+	return &Singleton{}
+}
+
+/**
+Possible Output:
+0x140000a2030
+0x140000a2040
+0x14000100000
+0x14000052008
+0x1400018e000
+ */
+```
+
+Now to create singleton implementation, we use `sync.Once`:
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+var once sync.Once
+var instance *Singleton
+
+func main() {
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			obj := createInstance()
+			fmt.Printf("%p\n", obj)
+		}()
+	}
+
+	wg.Wait()
+}
+
+type Singleton struct {
+}
+
+func createInstance() *Singleton {
+	once.Do(func() {
+		instance = &Singleton{}
+	})
+	return instance
+}
+
+/**
+Possible Output:
+0x1023703a0
+0x1023703a0
+0x1023703a0
+0x1023703a0
+0x1023703a0
+*/
+```
