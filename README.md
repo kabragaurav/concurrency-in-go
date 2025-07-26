@@ -11,6 +11,8 @@ Concurrency is handled by Go Runtime.
 
 ![](./assets/GoRuntime.png)
 
+---
+
 ## Go Routines
 - Abstraction over threads
 - In general, `# of go routines > # of threads`
@@ -87,7 +89,7 @@ tata
  */
 ```
 
-## `sync.waitGroup`
+### `sync.waitGroup`
 - waits for goroutines to finish
 - Under the hood, it keep counter for number of goroutines to finish
 - All types in `sync` package MUST be passed as pointers to functions
@@ -124,9 +126,9 @@ seeyou
 */
 ```
 
-## Race Condition
-- Multiple goroutine try CUD on shared data simultaneously
-- `-race` flag can be used to print exact cause of panic. E.g. `go run -race main.go`
+### Race Condition
+- Multiple goroutine try CUD on shared data (critical section) simultaneously
+- `-race` flag (race detector) can be used to print exact cause of panic. E.g. `go run -race main.go`
 - The `Map` panics on concurrent CUD operations. Hence `sync.Map` should be used
 
 ```go
@@ -135,4 +137,25 @@ func (m *Map) Store(key, value interface{})
 func (m *Map) Range(f func(key, value interface{})) bool  // calls f() for all (K, V) pairs
 ```
 
-- 
+- Locks: `sync.Mutex`
+
+```go
+func (m *Mutex) Lock()
+func (m *Mutex) Unlock()
+```
+
+---
+
+## Channels
+- to pass values between functions that don't directly call each other
+- One way is to pass pointers (communicating by shared memory)
+- Channels are other way. They are FIFO queues
+- `chan` is reserved keyword and `<-` is channel operator
+- A channel is associated to only one data-type
+
+```go
+ch := make(chan T)
+ch <- data      // sending
+data := <- ch   // receiving
+```
+
