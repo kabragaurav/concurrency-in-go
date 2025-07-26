@@ -147,7 +147,7 @@ func (m *Mutex) Unlock()
 ---
 
 ## Channels
-- to pass values between functions that don't directly call each other
+- to pass values between goroutines that don't directly call each other (yes, channels are usable only by goroutines)
 - One way is to pass pointers (communicating by shared memory)
 - Channels are other way. They are FIFO queues
 - `chan` is reserved keyword and `<-` is channel operator
@@ -159,3 +159,226 @@ ch <- data      // sending
 data := <- ch   // receiving
 ```
 
+- Sending and receiving are both blocking
+- Types of channels:
+  - Unbuffered: Zero capacity. Sender and receiver both must be present (synchronous)
+  - Buffered: Pre-defined capacity. Abstraction over array (asynchronous)
+- Channels are always passed as pointers and hence no need to pass as `&ch`. Just `ch` suffices
+- channels are first-class citizen (part of `builtin.go`) and hence need no import
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan string) // unbuffered channel
+	go greet(ch)
+	time.Sleep(1 * time.Second)
+	fmt.Println(<-ch)
+}
+
+func greet(ch chan string) {
+	fmt.Println("Greet starting")
+	ch <- "Hello"
+	fmt.Println("Greet ending")
+}
+
+/**
+Since channel is unbuffered, sender (greet goroutine) wait for receiver (main goroutine)
+
+Hence output is just:
+Greet starting
+Hello
+*/
+```
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan string, 1) // unbuffered channel
+	go aloha(ch)
+	time.Sleep(1 * time.Second)
+	fmt.Println(<-ch)
+}
+
+func aloha(ch chan string) {
+	fmt.Println("Aloha starting")
+	ch <- "Aloha"
+	fmt.Println("Aloha ending")
+}
+
+/**
+Since channel is buffered, sender (greet goroutine) DOES NOT wait for receiver (main goroutine)
+
+Hence output is:
+Aloha starting
+Aloha ending
+Aloha
+*/
+```
+
+- Channel directions:
+  - Bidirectional (default, `chan T`)
+  - Unidirectional (`chan<- T` or `<-chan T`)
+  - the default (bidirectional) is implicitly casted to unidirectional while sending/receiving
+- Close a channel as `close(ch)`
+  - Sending causes panic
+  - Receiving returns zero-value of channel data-type once closed channel does not have anymore values
+  - Closing again causes panic
+
+#### What will be possible outputs of below programs?
+1. 
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan string)
+	greetings := []string{"Hello", "Hi", "Hey", "Hola", "Aloha"}
+	go sendToChannel(ch, greetings)
+	time.Sleep(2 * time.Second)
+	for {
+		greeting := <-ch
+		fmt.Println("Receive from channel", greeting)
+	}
+}
+
+func sendToChannel(ch chan string, greetings []string) {
+	for _, greeting := range greetings {
+		ch <- greeting
+	}
+}
+```
+
+Ans.:
+
+```
+Receive from channel Hello
+Receive from channel Hi
+Receive from channel Hey
+Receive from channel Hola
+Receive from channel Aloha
+fatal error: all goroutines are asleep - deadlock!
+```
+
+Reason: `greeting := <-ch` does not know channel is exhausted
+
+2. 
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan string)
+	greetings := []string{"Hello", "Hi", "Hey", "Hola", "Aloha"}
+	go sendToChannel(ch, greetings)
+	time.Sleep(2 * time.Second)
+	for {
+		greeting := <-ch
+		fmt.Println("Receive from channel", greeting)
+	}
+}
+
+func sendToChannel(ch chan string, greetings []string) {
+	for _, greeting := range greetings {
+		ch <- greeting
+	}
+	close(ch)   // Added close
+}
+```
+
+Ans.:
+
+```
+Receive from channel Hello
+Receive from channel Hi
+Receive from channel Hey
+Receive from channel Hola
+Receive from channel Aloha
+Receive from channel 
+Receive from channel 
+Receive from channel
+...
+```
+
+Reason: Once channel exhausts, receiving from closed channel gives zero-value of channel type (here "" for string)
+
+#### How to fix above code?
+
+Way 1: Using `ok`
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan string)
+	greetings := []string{"Hello", "Hi", "Hey", "Hola", "Aloha"}
+	go sendToChannel(ch, greetings)
+	time.Sleep(2 * time.Second)
+	for {
+		greeting, ok := <-ch
+		if !ok {
+			break
+		}
+		fmt.Println("Receive from channel", greeting)
+	}
+}
+
+func sendToChannel(ch chan string, greetings []string) {
+	for _, greeting := range greetings {
+		ch <- greeting
+	}
+	close(ch)
+}
+```
+
+Way 2: Using `for range` loop
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan string)
+	greetings := []string{"Hello", "Hi", "Hey", "Hola", "Aloha"}
+	go sendToChannel(ch, greetings)
+	time.Sleep(2 * time.Second)
+	for greeting := range ch {
+		fmt.Println("Receive from channel", greeting)
+	}
+}
+
+func sendToChannel(ch chan string, greetings []string) {
+	for _, greeting := range greetings {
+		ch <- greeting
+	}
+	close(ch)
+}
+```
